@@ -6,12 +6,12 @@ import path from "path";
 export default defineConfig({
   server: {
     host: "::",
-    port: 8080,
+    port: 5173,
+    strictPort: true, // Prevents falling back to another port
   },
   plugins: [react()],
-   base: process.env.NODE_ENV === 'production' 
-    ? '/Report-Generation-System/'  // Production: GitHub Pages
-    : '/',  
+  // Always use the base path for both development and production
+  base: '/Report-Generation-System/',  
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
