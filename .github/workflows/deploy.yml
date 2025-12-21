@@ -3,10 +3,7 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
 
-# These permissions are required for GitHub Pages
 permissions:
   contents: write
   pages: write
@@ -20,22 +17,17 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
     
-    - name: Setup pnpm
-      uses: pnpm/action-setup@v4
-      with:
-        version: '8'
-    
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '20'
-        cache: 'pnpm'
+        node-version: '18'  # Use 18 instead of 20 for better compatibility
+        cache: 'npm'  # Changed from 'pnpm' to 'npm'
     
     - name: Install dependencies
-      run: pnpm install
+      run: npm ci  # Use npm ci instead of pnpm install
     
     - name: Build project
-      run: pnpm build
+      run: npm run build  # Changed from pnpm build
     
     - name: Upload artifact
       uses: actions/upload-pages-artifact@v3
@@ -49,7 +41,7 @@ jobs:
     
     runs-on: ubuntu-latest
     needs: build
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main'
     
     steps:
     - name: Deploy to GitHub Pages
