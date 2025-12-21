@@ -9,7 +9,9 @@ export default defineConfig({
     port: 8080,
   },
   plugins: [react()],
-  // base: '/Report-Generation-System/',  
+   base: process.env.NODE_ENV === 'production' 
+    ? '/Report-Generation-System/'  // Production: GitHub Pages
+    : '/',  
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
