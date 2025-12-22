@@ -1,4 +1,109 @@
-name: Deploy to GitHub Pages with Docker
+# name: Deploy to GitHub Pages with Docker
+
+# on:
+#   push:
+#     branches: ['main']
+#   workflow_dispatch:
+
+# permissions:
+#   contents: read
+#   pages: write
+#   id-token: write
+#   packages: write  # Added for Docker registry access
+
+# concurrency:
+#   group: 'pages'
+#   cancel-in-progress: true
+
+# env:
+#   REGISTRY: ghcr.io
+#   IMAGE_NAME: ${{ github.repository }}
+
+# jobs:
+#   # Docker Build Job (runs in parallel with build job)
+#   docker-build:
+#     runs-on: ubuntu-latest
+#     permissions:
+#       contents: read
+#       packages: write
+      
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
+      
+#       - name: Set up Docker Buildx
+#         uses: docker/setup-buildx-action@v3
+      
+#       - name: Log in to GitHub Container Registry
+#         uses: docker/login-action@v3
+#         with:
+#           registry: ${{ env.REGISTRY }}
+#           username: ${{ github.actor }}
+#           password: ${{ secrets.GITHUB_TOKEN }}
+      
+#       - name: Extract metadata for Docker
+#         id: meta
+#         uses: docker/metadata-action@v5
+#         with:
+#           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+#           tags: |
+#             type=ref,event=branch
+#             type=sha,prefix=commit-
+      
+#       - name: Build and push Docker image
+#         uses: docker/build-push-action@v5
+#         with:
+#           context: .
+#           push: true
+#           tags: ${{ steps.meta.outputs.tags }}
+#           labels: ${{ steps.meta.outputs.labels }}
+#           cache-from: type=gha
+#           cache-to: type=gha,mode=max
+
+#   # Build for GitHub Pages (your existing job)
+#   build:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Checkout
+#         uses: actions/checkout@v4
+      
+#       - name: Setup Node.js
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: '18'
+#           cache: 'npm'
+      
+#       - name: Install dependencies
+#         run: npm ci
+      
+#       - name: Build
+#         run: npm run build
+#         env:
+#           NODE_ENV: production
+      
+#       - name: Setup Pages
+#         uses: actions/configure-pages@v4
+      
+#       - name: Upload artifact
+#         uses: actions/upload-pages-artifact@v3
+#         with:
+#           path: './dist'
+
+#   # Deploy to GitHub Pages (your existing job)
+#   deploy:
+#     environment:
+#       name: github-pages
+#       url: ${{ steps.deployment.outputs.page_url }}
+#     runs-on: ubuntu-latest
+#     needs: build  # Only depends on build job, not docker
+#     steps:
+#       - name: Deploy to GitHub Pages
+#         id: deployment
+#         uses: actions/deploy-pages@v4
+
+
+
+name: Deploy to GitHub Pages with Docker Validation
 
 on:
   push:
@@ -9,19 +114,15 @@ permissions:
   contents: read
   pages: write
   id-token: write
-  packages: write  # Added for Docker registry access
-
-concurrency:
-  group: 'pages'
-  cancel-in-progress: true
+  packages: write
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_NAME: ${{ lower(github.repository) }}  # FIX: lowercase
 
 jobs:
-  # Docker Build Job (runs in parallel with build job)
-  docker-build:
+  # 1. DOCKER BUILD & TEST (must pass before anything else)
+  docker-validation:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -31,38 +132,50 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Build Docker image
+        id: build
+        run: |
+          docker build -t report-system .
+          
+      - name: Test Docker container
+        run: |
+          # Start container
+          docker run -d --name test-container -p 8080:80 report-system
+          sleep 5
+          
+          # Test if website loads
+          echo "Testing container..."
+          if curl -s -f http://localhost:8080 > /dev/null; then
+            echo "✅ Container test passed!"
+          else
+            echo "❌ Container test failed!"
+            docker logs test-container
+            exit 1
+          fi
+          
+          # Cleanup
+          docker stop test-container
+          docker rm test-container
       
-      - name: Log in to GitHub Container Registry
+      - name: Push to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Extract metadata for Docker
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=branch
-            type=sha,prefix=commit-
-      
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Push Docker image
+        run: |
+          docker tag report-system ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          docker tag report-system ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
-  # Build for GitHub Pages (your existing job)
+  # 2. BUILD FOR GITHUB PAGES (only if Docker validation passes)
   build:
     runs-on: ubuntu-latest
+    needs: docker-validation  # ← CRITICAL: Only build if Docker passes
+    
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -89,17 +202,14 @@ jobs:
         with:
           path: './dist'
 
-  # Deploy to GitHub Pages (your existing job)
+  # 3. DEPLOY (only if both previous jobs pass)
   deploy:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
-    needs: build  # Only depends on build job, not docker
+    needs: [docker-validation, build]  # ← Wait for both
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-
-
-
