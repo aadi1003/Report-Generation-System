@@ -116,10 +116,6 @@ permissions:
   id-token: write
   packages: write
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ lower(github.repository) }}  # FIX: lowercase
-
 jobs:
   # 1. DOCKER BUILD & TEST (must pass before anything else)
   docker-validation:
@@ -127,7 +123,12 @@ jobs:
     permissions:
       contents: read
       packages: write
-      
+    
+    env:
+      REGISTRY: ghcr.io
+      # Convert to lowercase using shell command
+      IMAGE_NAME: aadi1003/report-generation-system  # Hardcoded lowercase
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
