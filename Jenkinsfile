@@ -12,7 +12,7 @@ pipeline {
         DOCKER_TAG = "${env.BUILD_NUMBER}"
         
         // GitHub credentials (use Jenkins credentials)
-        GITHUB_CREDENTIALS = credentials(`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`)
+        GITHUB_CREDENTIALS = credentials('github-token')
         
         // For frontend build
         NODE_ENV = 'production'
