@@ -11,7 +11,7 @@ export default defineConfig({
   },
   plugins: [react()],
   // Always use the base path for GitHub Pages
-  base: '/Report-Generation-System/',
+  base: '/',
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
